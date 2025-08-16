@@ -1,72 +1,45 @@
-// app/api/stripe/create-checkout-session/route.ts
+// src/app/api/stripe/create-checkout-session/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { adminDb } from "@/lib/firebase-admin";
-import { getBaseUrl } from "@/lib/origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-
-
 export async function POST(req: NextRequest) {
-
   try {
     const { siteKey } = await req.json();
-    if (!siteKey || typeof siteKey !== "string") {
-      return NextResponse.json({ error: "siteKey required" }, { status: 400 });
-    }
 
-    const appUrl = getBaseUrl();
-
-    // ここは「siteSettings/{siteKey}」という *docID=siteKey* 前提です
-    // もし docID が別なら、query で探すように変更してください。
-    const snap = await adminDb.doc(`siteSettings/${siteKey}`).get();
-    if (!snap.exists) {
-      return NextResponse.json({ error: "siteKey not found" }, { status: 404 });
-    }
-
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
     const priceId = process.env.STRIPE_DEFAULT_PRICE_ID;
-    if (!priceId) {
-      return NextResponse.json({ error: "STRIPE_DEFAULT_PRICE_ID missing" }, { status: 500 });
-    }
+    if (!appUrl) throw new Error("ENV: NEXT_PUBLIC_APP_URL missing");
+    if (!priceId) throw new Error("ENV: STRIPE_DEFAULT_PRICE_ID missing");
 
-    const customerId = snap.data()?.stripeCustomerId as string | undefined;
-    if (!customerId) {
-      return NextResponse.json({ error: "customer not found" }, { status: 400 });
-    }
+    const snap = await adminDb.doc(`siteSettings/${siteKey}`).get();
+    if (!snap.exists) throw new Error(`siteSettings/${siteKey} not found`);
 
-    // 既に有効なら新規セッションは作らない（任意）
-    const existing = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 10,
-    });
-    const active = existing.data.find(
-      (s) => (s.status === "active" || s.status === "trialing") && !s.cancel_at_period_end
-    );
-    if (active) {
-      return NextResponse.json({
-        message: "already active",
-        subscriptionId: active.id,
-      });
-    }
+    const data = snap.data() || {};
+    const customerId: string | undefined = data.stripeCustomerId;
+    const ownerEmail: string | undefined = data.ownerEmail;
 
-    const session = await stripe.checkout.sessions.create({
+    // customerId があれば指定、無ければ省略（Stripe が自動で Customer 作成）
+    const params: any = {
       mode: "subscription",
-      customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { siteKey },
-      // 必要に応じて:
-      // billing_address_collection: "auto",
-      // allow_promotion_codes: true,
       success_url: `${appUrl}/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}`,
-    });
+    };
+    if (customerId) params.customer = customerId;
+    if (!customerId && ownerEmail) params.customer_email = ownerEmail;
 
+    const session = await stripe.checkout.sessions.create(params);
     return NextResponse.json({ url: session.url });
-  } catch (err) {
-    console.error("create-checkout-session error:", err);
-    return NextResponse.json({ error: "Internal Error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("[create-checkout-session] error:", err);
+    return NextResponse.json(
+      { error: err?.message ?? "Internal Error" },
+      { status: 500 }
+    );
   }
 }
