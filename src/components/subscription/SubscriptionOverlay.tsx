@@ -11,6 +11,7 @@ type Status = "loading" | "paid" | "unpaid" | "pending" | "canceled" | "setup";
 export default function SubscriptionOverlay({ siteKey }: { siteKey: string }) {
   const [status, setStatus] = useState<Status>("loading");
   const [isFreePlan, setIsFreePlan] = useState<boolean | null>(null);
+  const [hasCustomer, setHasCustomer] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +25,6 @@ export default function SubscriptionOverlay({ siteKey }: { siteKey: string }) {
           ? `/api/stripe/verify-subscription?session_id=${sessionId}`
           : `/api/stripe/check-subscription?siteKey=${siteKey}`;
 
-        // ← fetchはこれ1回だけ
         const response = await fetch(apiUrl, { cache: "no-store" });
 
         let json: any = null;
@@ -50,11 +50,11 @@ export default function SubscriptionOverlay({ siteKey }: { siteKey: string }) {
           case "setup_mode":
             setStatus("setup");
             break;
+          // "none"（顧客なし等）は未払い扱いに寄せる
           default:
             setStatus("unpaid");
         }
 
-        // クエリ掃除
         if (sessionId) {
           const url = new URL(window.location.href);
           url.searchParams.delete("session_id");
@@ -62,34 +62,50 @@ export default function SubscriptionOverlay({ siteKey }: { siteKey: string }) {
         }
       } catch (e) {
         console.error("SubscriptionOverlay fetch error:", e);
-        if (!cancelled) setStatus("unpaid"); // 失敗時は未払い扱いでオーバーレイ表示
+        if (!cancelled) setStatus("unpaid"); // 失敗時は未払い扱い
       }
     };
 
-    const fetchIsFreePlan = async () => {
+    const fetchPlanAndCustomer = async () => {
       try {
         const snap = await getDoc(doc(db, "siteSettings", siteKey));
-        setIsFreePlan(snap.exists() ? snap.data()?.isFreePlan === true : false);
-      } catch {
+        if (!snap.exists()) {
+          setIsFreePlan(false);
+          setHasCustomer(false);
+          return;
+        }
+        const data = snap.data() as any;
+        setIsFreePlan(data.isFreePlan === true);
+        const cid = data.stripeCustomerId;
+        setHasCustomer(typeof cid === "string" && cid.trim().length > 0);
+      } catch (e) {
+        console.error("fetchPlanAndCustomer error:", e);
         setIsFreePlan(false);
+        setHasCustomer(false);
       }
     };
 
     checkPayment();
-    fetchIsFreePlan();
+    fetchPlanAndCustomer();
 
     return () => {
       cancelled = true;
     };
   }, [siteKey]);
 
-  // ローディング中は何も出さない
-  if (isFreePlan === null || status === "loading") return null;
+  // 取得中は何も出さない
+  if (isFreePlan === null || hasCustomer === null || status === "loading") {
+    return null;
+  }
+
   // 無料プランは表示しない
   if (isFreePlan) return null;
 
-  // 未払い系のみ表示
-  if (!["setup", "paid", "pending"].includes(status)) {
+  // 顧客未登録なら無条件でオーバーレイ表示
+  const mustShowOverlay =
+    !hasCustomer || !["setup", "paid", "pending"].includes(status);
+
+  if (mustShowOverlay) {
     return (
       <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-6 text-white">
         <p className="mb-4 text-center text-lg">
