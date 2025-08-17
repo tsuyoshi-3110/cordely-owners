@@ -597,7 +597,9 @@ export default function AddProductPage() {
                 <p className="text-sm text-gray-600">既存セクション</p>
                 <ul className="mt-2 divide-y rounded-md border">
                   {sections.length === 0 && (
-                    <li className="p-3 text-sm text-gray-500">まだありません</li>
+                    <li className="p-3 text-sm text-gray-500">
+                      まだありません
+                    </li>
                   )}
                   {sections.map((s) => (
                     <li
@@ -649,10 +651,14 @@ export default function AddProductPage() {
                         sizes="50vw"
                       />
                       {p.soldOut && (
-                        <div className="absolute inset-0 grid place-items-center bg-black/40">
-                          <span className="rounded bg-white/90 px-2 py-1 text-xs font-semibold">
-                            SOLD OUT
-                          </span>
+                        <div className="absolute inset-0 z-10 grid place-items-center bg-black/40">
+                          <Image
+                            src="/images/soldOut.png" // public/images/soldOut.png に置いたファイル
+                            alt="SOLD OUT"
+                            fill
+                            className="object-contain pointer-events-none select-none"
+                            priority={false}
+                          />
                         </div>
                       )}
                     </div>
@@ -698,7 +704,11 @@ export default function AddProductPage() {
         title={formOpen ? "閉じる" : "追加フォームを開く"}
         className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-[70] h-14 w-14 rounded-full shadow-lg"
       >
-        {formOpen ? <Minus className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
+        {formOpen ? (
+          <Minus className="h-6 w-6" />
+        ) : (
+          <Plus className="h-6 w-6" />
+        )}
       </Button>
 
       {/* AIダイアログ */}
@@ -708,7 +718,8 @@ export default function AddProductPage() {
             <DialogTitle>AIで本文生成</DialogTitle>
           </DialogHeader>
           <p className="mb-2 text-sm text-gray-600">
-            「{name || "（タイトル未入力）"}」をもとに、キーワードを1〜3個入力してください。
+            「{name || "（タイトル未入力）"}
+            」をもとに、キーワードを1〜3個入力してください。
           </p>
           <div className="space-y-3">
             <Input
@@ -736,7 +747,10 @@ export default function AddProductPage() {
             <Button variant="outline" onClick={() => setAiOpen(false)}>
               キャンセル
             </Button>
-            <Button onClick={generateDescription} disabled={!canGenerate || aiLoading}>
+            <Button
+              onClick={generateDescription}
+              disabled={!canGenerate || aiLoading}
+            >
               {aiLoading ? "生成中…" : "生成する"}
             </Button>
           </DialogFooter>
@@ -1009,7 +1023,10 @@ export default function AddProductPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => handleEditOpenChange(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handleEditOpenChange(false)}
+            >
               キャンセル
             </Button>
             <Button onClick={saveEdit} disabled={!editing}>

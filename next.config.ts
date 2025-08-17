@@ -1,27 +1,20 @@
-// next.config.ts
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
-    // Firebase Storage のダウンロードURLを許可
     remotePatterns: [
       {
-        protocol: "https",
-        hostname: "firebasestorage.googleapis.com",
-        // 必要ならパスも絞れます:
-        // pathname: "/v0/b/**",
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+        pathname: '/v0/b/**', // Firebase Storage のパス
       },
-      // まれに storage.googleapis.com を使う場合に備えて
+      // 使う可能性があるなら追加
       {
-        protocol: "https",
-        hostname: "storage.googleapis.com",
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/**',
       },
     ],
   },
-  // お好みで：lucide-reactの最適化など
-  // experimental: {
-  //   optimizePackageImports: ["lucide-react"],
-  // },
 };
 
 export default nextConfig;

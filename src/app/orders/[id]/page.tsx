@@ -6,7 +6,13 @@ import { Separator } from "@/components/ui/separator";
 import { orderIdAtom } from "@/lib/atoms/routeAtoms";
 import { siteSettingsAtom } from "@/lib/atoms/siteSettingsAtom";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, Timestamp, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+} from "firebase/firestore";
 import { useAtomValue } from "jotai";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
@@ -87,7 +93,10 @@ export default function OrderDetailPage() {
     }
     try {
       setSaving(true);
-      await updateDoc(doc(db, "orders", order.id), { isComp: true });
+      await updateDoc(doc(db, "orders", order.id), {
+        isComp: true,
+        completedAt: serverTimestamp(), // ← 追加
+      });
       router.back();
     } catch (e) {
       console.error(e);

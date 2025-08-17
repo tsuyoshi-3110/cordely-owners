@@ -1,26 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { signOut, onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-import {
-  Menu, List, Package, Pencil, RotateCcw, LogOut, LogIn,
-} from "lucide-react";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose,
-} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { siteSettingsAtom } from "@/lib/atoms/siteSettingsAtom";
-import { useSetAtom } from "jotai";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { useAtomValue, useSetAtom } from "jotai";
+import {
+  List,
+  LogIn,
+  LogOut,
+  Menu,
+  Package,
+  Palette,
+  RotateCcw,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Navbar() {
   const router = useRouter();
   const setSiteSettings = useSetAtom(siteSettingsAtom);
+  const site = useAtomValue(siteSettingsAtom);
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
+
+  const siteTitle = site?.siteName ?? "";
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => setIsAuthed(!!user));
@@ -72,25 +86,46 @@ export default function Navbar() {
               <div className="mt-4 flex flex-col space-y-2">
                 {/* 一覧 */}
                 <SheetClose asChild>
-                  <Button variant="ghost" className="justify-start" onClick={() => go("/")}>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => go("/")}
+                  >
                     <List className="mr-2" />
                     注文一覧
                   </Button>
                 </SheetClose>
 
-
-
                 {/* 商品追加 */}
                 <SheetClose asChild>
-                  <Button variant="ghost" className="justify-start" onClick={() => go("/add-product")}>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => go("/add-product")}
+                  >
                     <Package className="mr-2" />
                     商品管理
                   </Button>
                 </SheetClose>
 
+                <SheetClose asChild>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => go("/branding")}
+                  >
+                    <Palette className="mr-2" />
+                    ロゴ/サイト名設定
+                  </Button>
+                </SheetClose>
+
                 {/* （任意）リセット：今は閉じるだけ。処理を入れる場合はここに */}
                 <SheetClose asChild>
-                  <Button variant="destructive" className="justify-start" onClick={() => setOpen(false)}>
+                  <Button
+                    variant="destructive"
+                    className="justify-start"
+                    onClick={() => setOpen(false)}
+                  >
                     <RotateCcw className="mr-2" />
                     リセット
                   </Button>
@@ -99,7 +134,11 @@ export default function Navbar() {
                 {/* 未ログイン時のみ：ログイン */}
                 {isAuthed === false && (
                   <SheetClose asChild>
-                    <Button variant="ghost" className="justify-start" onClick={() => go("/login")}>
+                    <Button
+                      variant="ghost"
+                      className="justify-start"
+                      onClick={() => go("/login")}
+                    >
                       <LogIn className="mr-2" />
                       ログイン
                     </Button>
@@ -109,7 +148,11 @@ export default function Navbar() {
                 {/* ログイン時のみ：ログアウト */}
                 {isAuthed === true && (
                   <SheetClose asChild>
-                    <Button variant="default" className="justify-start" onClick={handleLogout}>
+                    <Button
+                      variant="default"
+                      className="justify-start"
+                      onClick={handleLogout}
+                    >
                       <LogOut className="mr-2" />
                       ログアウト
                     </Button>
@@ -120,6 +163,15 @@ export default function Navbar() {
           </Sheet>
         </div>
       </div>
+
+      {/* 中央：サイト名（クリックを邪魔しないよう pointer-events-none） */}
+      {siteTitle && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex h-14 items-center justify-center">
+          <span className="max-w-[60%] truncate text-white text-sm font-semibold md:text-base drop-shadow">
+            {siteTitle}
+          </span>
+        </div>
+      )}
     </header>
   );
 }
