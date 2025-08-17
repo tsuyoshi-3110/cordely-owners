@@ -16,7 +16,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <SiteSettingsBootstrap />
       <Navbar />
       {children}
-      {siteKey && <SubscriptionOverlay siteKey={siteKey} />}
+      {/* {siteKey && <SubscriptionOverlay siteKey={siteKey} />} */}
     </>
   );
 }
