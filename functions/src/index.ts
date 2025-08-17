@@ -16,7 +16,7 @@ type OrderDoc = {
   customerFcmToken?: string | null;
 };
 
-// 👈 お客さま側の URL をデフォルトに
+// ✅ クリック時に開くのは「客側」(customers) の URL
 const CLIENT_BASE_URL =
   process.env.CLIENT_BASE_URL ??
   "https://cordely-customers.vercel.app";
@@ -31,32 +31,34 @@ export const notifyOrderCompleted = onDocumentUpdated(
     if (!after.isComp) return;
 
     const token = after.customerFcmToken ?? null;
-    if (!token) return;
+    if (!token) {
+      logger.info("customerFcmToken is empty; skip push.");
+      return;
+    }
 
     const siteKey = after.siteKey ?? "";
     const orderNo = Number(after.orderNo ?? 0);
 
     const link = `${CLIENT_BASE_URL}/?siteKey=${encodeURIComponent(siteKey)}&done=${orderNo}`;
 
-    try {
-      const messageId = await getMessaging(app).send({
-        token,
+    await getMessaging(app).send({
+      token,
+      notification: {
+        title: "ご注文ができあがりました！",
+        body: `注文番号 ${orderNo} をお受け取りください`,
+      },
+      // 🔑 SW 手動表示を使う可能性もあるので、どちらでも遷移できるよう両方に入れておく
+      webpush: {
+        fcmOptions: { link },
         notification: {
-          title: "ご注文ができあがりました！",
-          body: `注文番号 ${orderNo} をお受け取りください`,
+          icon: "/icons/icon-192x192.png",
+          badge: "/icons/badge-72x72.png",
         },
-        webpush: {
-          fcmOptions: { link },
-          notification: {
-            icon: "/icons/icon-192x192.png",
-            badge: "/icons/badge-72x72.png",
-          },
-        },
-        data: { siteKey, done: String(orderNo) },
-      });
-      logger.info("FCM sent", { messageId, orderNo, siteKey });
-    } catch (err) {
-      logger.error("FCM send failed", { orderNo, siteKey, err });
-    }
+      },
+      // 🔑 SW の notificationclick で参照できるよう data.url を必ず付与
+      data: { siteKey, done: String(orderNo), url: link },
+    });
+
+    logger.info(`Sent push to token for orderNo=${orderNo}, siteKey=${siteKey}`);
   }
 );
