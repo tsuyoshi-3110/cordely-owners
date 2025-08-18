@@ -1,30 +1,30 @@
 // ForgotEmail.tsx
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { db } from "@/lib/firebase";
 import {
   collection,
+  DocumentData,
   getDocs,
+  limit,
   query,
   where,
-  limit,
-  DocumentData,
 } from "firebase/firestore";
 import {
   AsYouType,
   isValidPhoneNumber,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type Props = {
   onClose?: () => void;
   onEmailFound?: (email: string) => void;
 };
 
-export default function ForgotEmail({ onClose, onEmailFound }: Props) {
+export default function ForgotEmail() {
   const router = useRouter();
 
   const [phone, setPhone] = useState("");
@@ -41,8 +41,8 @@ export default function ForgotEmail({ onClose, onEmailFound }: Props) {
   }, []);
 
   const handleClose = () => {
-    if (onClose) return onClose();
-    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    if (typeof window !== "undefined" && window.history.length > 1)
+      router.back();
     else router.push("/login");
   };
 
@@ -66,74 +66,77 @@ export default function ForgotEmail({ onClose, onEmailFound }: Props) {
   const isPhoneValid = isValidPhoneNumber(phone || rawPhone, "JP");
 
   const handleSearch = async () => {
-  setLoading(true);
-  setEmail("");
-  setError("");
-
-  try {
-    // 1) 正規化
-    const normalizedE164 = normalizeToE164(phone || rawPhone);
-    const normalizedDigits = normalizedE164.replace(/\D/g, "");
-
-    // 2) まずはインデックスで速く検索（ownerPhoneE164 を用意している場合）
-    const col = collection(db, "siteSettings");
-    let found: DocumentData | null = null;
+    setLoading(true);
+    setEmail("");
+    setError("");
 
     try {
-      const q1 = query(col, where("ownerPhoneE164", "==", normalizedE164), limit(1));
-      const snap1 = await getDocs(q1);
-      if (!snap1.empty) {
-        found = snap1.docs[0].data();
-      }
-    } catch {
-      // インデックス未作成やフィールド未整備時は無視（後で全件スキャン）
-    }
+      // 1) 正規化
+      const normalizedE164 = normalizeToE164(phone || rawPhone);
+      const normalizedDigits = normalizedE164.replace(/\D/g, "");
 
-    // 3) 見つからなければ全件スキャンで照合（小規模前提のフォールバック）
-    if (!found) {
-      const all = await getDocs(col);
-      for (const d of all.docs) {
-        const data = d.data() as {
-          ownerPhone?: string;
-          ownerPhoneE164?: string;
-          ownerEmail?: string;
-        };
-        const candidate = data.ownerPhoneE164 ?? normalizeToE164(String(data.ownerPhone ?? ""));
-        if (candidate && candidate.replace(/\D/g, "") === normalizedDigits) {
-          found = data;
-          break;
+      // 2) まずはインデックスで速く検索（ownerPhoneE164 を用意している場合）
+      const col = collection(db, "siteSettings");
+      let found: DocumentData | null = null;
+
+      try {
+        const q1 = query(
+          col,
+          where("ownerPhoneE164", "==", normalizedE164),
+          limit(1)
+        );
+        const snap1 = await getDocs(q1);
+        if (!snap1.empty) {
+          found = snap1.docs[0].data();
+        }
+      } catch {
+        // インデックス未作成やフィールド未整備時は無視（後で全件スキャン）
+      }
+
+      // 3) 見つからなければ全件スキャンで照合（小規模前提のフォールバック）
+      if (!found) {
+        const all = await getDocs(col);
+        for (const d of all.docs) {
+          const data = d.data() as {
+            ownerPhone?: string;
+            ownerPhoneE164?: string;
+            ownerEmail?: string;
+          };
+          const candidate =
+            data.ownerPhoneE164 ??
+            normalizeToE164(String(data.ownerPhone ?? ""));
+          if (candidate && candidate.replace(/\D/g, "") === normalizedDigits) {
+            found = data;
+            break;
+          }
         }
       }
-    }
 
-    // 4) 結果
-    if (found) {
-      const foundEmail = (found.ownerEmail ?? "").trim();
+      // 4) 結果
+      if (found) {
+        const foundEmail = (found.ownerEmail ?? "").trim();
 
-      if (foundEmail) {
-        setEmail(foundEmail);
-        if (onEmailFound) onEmailFound(foundEmail);
-
-        // ▼ ログイン画面プリフィル用に一時保存して遷移
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem("prefillEmail", foundEmail);
+        if (foundEmail) {
+          setEmail(foundEmail);
+          // ▼ ログイン画面プリフィル用に一時保存して遷移
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem("prefillEmail", foundEmail);
+          }
+          router.replace("/login");
+          return;
+        } else {
+          setEmail("（メールアドレスが未登録です）");
         }
-        router.replace("/login");
-        return;
       } else {
-        setEmail("（メールアドレスが未登録です）");
+        setError("一致する電話番号が見つかりません。");
       }
-    } else {
-      setError("一致する電話番号が見つかりません。");
+    } catch (e) {
+      console.error(e);
+      setError("エラーが発生しました。");
+    } finally {
+      setLoading(false);
     }
-  } catch (e) {
-    console.error(e);
-    setError("エラーが発生しました。");
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   // 背景クリックで閉じる（中身クリックは閉じない）
   const onBackdropClick = () => handleClose();
@@ -150,7 +153,9 @@ export default function ForgotEmail({ onClose, onEmailFound }: Props) {
         className="bg-white w-full max-w-md rounded-lg p-6 shadow-lg space-y-4 mx-5"
         onClick={stop}
       >
-        <h2 className="text-xl font-bold text-center">メールアドレスを忘れた場合</h2>
+        <h2 className="text-xl font-bold text-center">
+          メールアドレスを忘れた場合
+        </h2>
         <p className="text-sm text-gray-600 text-center">
           登録済みの電話番号を入力してください（例: 090-1234-5678）。
         </p>
@@ -182,7 +187,12 @@ export default function ForgotEmail({ onClose, onEmailFound }: Props) {
         )}
         {error && <p className="text-red-600 text-center text-sm">{error}</p>}
 
-        <Button type="button" variant="outline" onClick={handleClose} className="w-full">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleClose}
+          className="w-full"
+        >
           閉じる
         </Button>
       </div>

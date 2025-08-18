@@ -1,64 +1,170 @@
-// src/app/forgot-password/page.tsx
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { FirebaseError } from "firebase/app";
+
 import { auth } from "@/lib/firebase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FirebaseError } from "firebase/app";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  signOut,
+  updatePassword,
+} from "firebase/auth";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-export default function ForgotPasswordPage() {
+export default function Page() {
+  const user = auth.currentUser;
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState<{ text: string; kind: "info" | "error" } | null>(null);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const isEmailValid = (v: string) => !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const validatePassword = (pw: string): string | null => {
+    if (pw.length < 8) return "パスワードは8文字以上にしてください。";
+    if (!/[a-z]/.test(pw)) return "小文字を1文字以上含めてください。";
+    if (!/[A-Z]/.test(pw)) return "大文字を1文字以上含めてください。";
+    if (!/[0-9]/.test(pw)) return "数字を1文字以上含めてください。";
+    if (!/[!@#$%^&*()_+\-=[\]{};':\"\\|,.<>/?]/.test(pw))
+      return "記号（!@#$%^&*など）を1文字以上含めてください。";
+    return null;
+  };
 
-  const handleReset = async () => {
-    const addr = email.trim();
-    setMsg(null);
-    if (!isEmailValid(addr)) {
-      setMsg({ text: "正しいメールアドレスを入力してください。", kind: "error" });
+  const handleChangePassword = async () => {
+    if (!user || !user.email) {
+      setMessage(
+        "ログイン情報が確認できません。再度ログインし直してください。"
+      );
+      setIsSuccess(false);
       return;
     }
+    if (newPassword !== confirmPassword) {
+      setMessage("新しいパスワードと確認用パスワードが一致しません。");
+      setIsSuccess(false);
+      return;
+    }
+    const error = validatePassword(newPassword);
+    if (error) {
+      setMessage(error);
+      setIsSuccess(false);
+      return;
+    }
+
+    setLoading(true);
     try {
-      setLoading(true);
-      // 事前チェックはしない（列挙防止対策のため）
-      await sendPasswordResetEmail(auth, addr);
-      setMsg({
-        text: "パスワード再設定用のメールを送信しました。届かない場合は迷惑メールをご確認ください。",
-        kind: "info",
-      });
-    } catch (e) {
-      console.error(e);
-      const fe = e as FirebaseError;
-      if (fe.code === "auth/operation-not-allowed") {
-        setMsg({ text: "Email/Password のサインイン方法が無効です。コンソールで有効化してください。", kind: "error" });
-      } else if (fe.code === "auth/invalid-email") {
-        setMsg({ text: "メールアドレスの形式が正しくありません。", kind: "error" });
+      const cred = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, cred);
+      await updatePassword(user, newPassword);
+      await signOut(auth);
+
+      setMessage("✅ パスワードを変更しました。再度ログインしてください。");
+      setIsSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      setTimeout(() => router.replace("/login"), 1500);
+    } catch (err) {
+      console.error(err);
+      setIsSuccess(false);
+      if (err instanceof FirebaseError) {
+        switch (err.code) {
+          case "auth/invalid-credential":
+          case "auth/wrong-password":
+            setMessage("現在のパスワードが正しくありません。");
+            break;
+          case "auth/requires-recent-login":
+            setMessage(
+              "セキュリティのため再ログインが必要です。ログインし直してください。"
+            );
+            break;
+          case "auth/network-request-failed":
+            setMessage(
+              "ネットワークエラーが発生しました。接続をご確認ください。"
+            );
+            break;
+          default:
+            setMessage(`エラーが発生しました: ${err.message}`);
+        }
       } else {
-        setMsg({ text: "送信に失敗しました。時間をおいて再度お試しください。", kind: "error" });
+        setMessage("予期しないエラーが発生しました。もう一度お試しください。");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClose = () => (history.length > 1 ? router.back() : router.push("/login"));
+  const handleClose = () => {
+    if (typeof window !== "undefined" && window.history.length > 1)
+      router.back();
+    else router.push("/login");
+  };
 
   return (
-    <div className="max-w-md mx-auto p-6 space-y-3">
-      <h2 className="text-xl font-bold text-center">パスワードをリセット</h2>
-      <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-      <Button onClick={handleReset} disabled={loading || !isEmailValid(email)} className="w-full">
-        {loading ? "送信中…" : "リセットメール送信"}
-      </Button>
-      {msg && (
-        <p className={`text-center text-sm ${msg.kind === "error" ? "text-red-600" : "text-gray-700"}`}>{msg.text}</p>
+    <div className="max-w-xl mx-auto bg-white p-6 rounded shadow space-y-4 pt-20">
+      <h2 className="text-xl font-bold text-center">パスワード変更</h2>
+      <p className="text-sm text-gray-600 text-center">
+        条件：8文字以上・大文字・小文字・数字・記号（!@#$% など）
+      </p>
+
+      <input
+        type={showPassword ? "text" : "password"}
+        placeholder="現在のパスワード"
+        className="w-full border px-3 py-2 rounded"
+        value={currentPassword}
+        onChange={(e) => setCurrentPassword(e.target.value)}
+      />
+      <input
+        type={showPassword ? "text" : "password"}
+        placeholder="新しいパスワード"
+        className="w-full border px-3 py-2 rounded"
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+      />
+      <input
+        type={showPassword ? "text" : "password"}
+        placeholder="新しいパスワード（確認）"
+        className="w-full border px-3 py-2 rounded"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+      />
+
+      <div className="text-right text-sm">
+        <button
+          onClick={() => setShowPassword((prev) => !prev)}
+          className="text-blue-600 underline"
+        >
+          パスワードを{showPassword ? "非表示" : "表示"}にする
+        </button>
+      </div>
+
+      <button
+        onClick={handleChangePassword}
+        disabled={loading}
+        className="bg-blue-600 text-white w-full py-2 rounded disabled:opacity-50"
+      >
+        {loading ? "変更中…" : "変更する"}
+      </button>
+
+      <button
+        onClick={handleClose}
+        className="text-center underline text-sm text-gray-600 w-full mt-2"
+      >
+        閉じる
+      </button>
+
+      {message && (
+        <p
+          className={`mt-2 text-sm text-center ${
+            isSuccess ? "text-green-600" : "text-red-600"
+          }`}
+        >
+          {message}
+        </p>
       )}
-      <Button variant="outline" onClick={handleClose} className="w-full">閉じる</Button>
     </div>
   );
 }

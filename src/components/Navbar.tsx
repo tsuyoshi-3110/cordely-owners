@@ -14,7 +14,15 @@ import { siteSettingsAtom } from "@/lib/atoms/siteSettingsAtom";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useAtomValue, useSetAtom } from "jotai";
-import { List, LogOut, Menu, Package, Palette, RotateCcw, Lock } from "lucide-react";
+import {
+  List,
+  Lock,
+  LogOut,
+  Menu,
+  Package,
+  Palette,
+  RotateCcw,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -97,6 +105,7 @@ export default function Navbar() {
       router.replace("/login");
     } finally {
       setOpen(false);
+      router.replace("/login");
     }
   };
 

@@ -1,4 +1,6 @@
+// src/app/change-password/page.tsx
 "use client";
+
 import { auth } from "@/lib/firebase";
 import { FirebaseError } from "firebase/app";
 import {
@@ -10,11 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type Props = {
-  onClose: () => void;
-};
-
-export default function ChangePassword({ onClose }: Props) {
+export default function Page() {
   const user = auth.currentUser;
   const router = useRouter();
 
@@ -24,9 +22,8 @@ export default function ChangePassword({ onClose }: Props) {
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // ← パスワード表示制御
+  const [showPassword, setShowPassword] = useState(false);
 
-  // ✅ パスワードバリデーション関数
   const validatePassword = (pw: string): string | null => {
     if (pw.length < 8) return "パスワードは8文字以上にしてください。";
     if (!/[a-z]/.test(pw)) return "小文字を1文字以上含めてください。";
@@ -39,9 +36,7 @@ export default function ChangePassword({ onClose }: Props) {
 
   const handleChangePassword = async () => {
     if (!user || !user.email) {
-      setMessage(
-        "ログイン情報が確認できません。再度ログインし直してください。"
-      );
+      setMessage("ログイン情報が確認できません。再度ログインし直してください。");
       setIsSuccess(false);
       return;
     }
@@ -60,9 +55,9 @@ export default function ChangePassword({ onClose }: Props) {
     setLoading(true);
     try {
       const cred = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, cred); // 要再認証
-      await updatePassword(user, newPassword); // 変更
-      await signOut(auth); // ログアウト
+      await reauthenticateWithCredential(user, cred);
+      await updatePassword(user, newPassword);
+      await signOut(auth);
 
       setMessage("✅ パスワードを変更しました。再度ログインしてください。");
       setIsSuccess(true);
@@ -70,14 +65,7 @@ export default function ChangePassword({ onClose }: Props) {
       setNewPassword("");
       setConfirmPassword("");
 
-      // 2秒待って閉じる／遷移（待ち時間が不要なら即時でもOK）
-      setTimeout(() => {
-        if (typeof onClose === "function") {
-          onClose(); // モーダル用途
-        } else {
-          router.replace("/login"); // ページ用途
-        }
-      }, 1500);
+      setTimeout(() => router.replace("/login"), 1500);
     } catch (err) {
       console.error(err);
       setIsSuccess(false);
@@ -88,14 +76,10 @@ export default function ChangePassword({ onClose }: Props) {
             setMessage("現在のパスワードが正しくありません。");
             break;
           case "auth/requires-recent-login":
-            setMessage(
-              "セキュリティのため再ログインが必要です。いったんログインし直してください。"
-            );
+            setMessage("セキュリティのため再ログインが必要です。ログインし直してください。");
             break;
           case "auth/network-request-failed":
-            setMessage(
-              "ネットワークエラーが発生しました。接続をご確認ください。"
-            );
+            setMessage("ネットワークエラーが発生しました。接続をご確認ください。");
             break;
           default:
             setMessage(`エラーが発生しました: ${err.message}`);
@@ -108,24 +92,16 @@ export default function ChangePassword({ onClose }: Props) {
     }
   };
 
+  const handleClose = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/login");
+  };
+
   return (
     <div className="max-w-xl mx-auto bg-white p-6 rounded shadow space-y-4 pt-20">
       <h2 className="text-xl font-bold text-center">パスワード変更</h2>
       <p className="text-sm text-gray-600 text-center">
-        現在のパスワードを入力し、新しいパスワードに変更できます。
-        <br />
-        以下の条件をすべて満たす必要があります：
-        <br />
-        <span className="text-xs">
-          ・8文字以上・大文字・小文字・数字・記号（!@#$% など）
-        </span>
-        <br />※ パスワードは英大文字・小文字・数字・記号を含めてください
-        <br />
-        例:{" "}
-        <code className="bg-gray-100 px-1 py-0.5 rounded">
-          kikaikintots123!
-        </code>{" "}
-        や <code className="bg-gray-100 px-1 py-0.5 rounded">Sakura2024$</code>
+        条件：8文字以上・大文字・小文字・数字・記号（!@#$% など）
       </p>
 
       <input
@@ -150,7 +126,6 @@ export default function ChangePassword({ onClose }: Props) {
         onChange={(e) => setConfirmPassword(e.target.value)}
       />
 
-      {/* 表示切替ボタン */}
       <div className="text-right text-sm">
         <button
           onClick={() => setShowPassword((prev) => !prev)}
@@ -169,18 +144,14 @@ export default function ChangePassword({ onClose }: Props) {
       </button>
 
       <button
-        onClick={onClose}
+        onClick={handleClose}
         className="text-center underline text-sm text-gray-600 w-full mt-2"
       >
         閉じる
       </button>
 
       {message && (
-        <p
-          className={`mt-2 text-sm text-center ${
-            isSuccess ? "text-green-600" : "text-red-600"
-          }`}
-        >
+        <p className={`mt-2 text-sm text-center ${isSuccess ? "text-green-600" : "text-red-600"}`}>
           {message}
         </p>
       )}

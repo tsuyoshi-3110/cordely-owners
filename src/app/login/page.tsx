@@ -1,18 +1,18 @@
 // app/login/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { FirebaseError } from "firebase/app";
-import { auth } from "@/lib/firebase";
-import { useSetAtom } from "jotai";
-import { siteSettingsAtom } from "@/lib/atoms/siteSettingsAtom";
-import { fetchSiteSettingsByOwnerId } from "@/lib/fetchSiteSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { siteSettingsAtom } from "@/lib/atoms/siteSettingsAtom";
+import { fetchSiteSettingsByOwnerId } from "@/lib/fetchSiteSettings";
+import { auth } from "@/lib/firebase";
+import { FirebaseError } from "firebase/app";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { useSetAtom } from "jotai";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 function messageFromAuthError(err: unknown) {
@@ -44,12 +44,15 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-  const saved = typeof window !== "undefined" ? sessionStorage.getItem("prefillEmail") : null;
-  if (saved) {
-    setEmail(saved);
-    sessionStorage.removeItem("prefillEmail");
-  }
-}, []);
+    const saved =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("prefillEmail")
+        : null;
+    if (saved) {
+      setEmail(saved);
+      sessionStorage.removeItem("prefillEmail");
+    }
+  }, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -151,7 +154,7 @@ export default function LoginPage() {
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full sm:w-auto ext-blue-500"
+                className="w-full sm:w-auto text-blue-500"
                 onClick={() => router.push("/forgot-email")}
               >
                 メールアドレスを忘れた
