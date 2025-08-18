@@ -6,8 +6,9 @@ export type SiteSettings = {
   siteKey: string;
   siteName: string;
   taxDisplayMode?: "inclusive" | "exclusive";
-  ownerId?: string;        // クライアント保持は任意
-  updatedAt?: number;      // 同期時刻など（任意）
+  ownerId?: string; // クライアント保持は任意
+  updatedAt?: number; // 同期時刻など（任意）
+  logoUrl?: string;
 };
 
 /** Firestoreのドキュメント形（id を含む型） */
@@ -15,7 +16,7 @@ export interface SiteSettingsDoc {
   id: string;
   siteKey: string;
   siteName: string;
-  ownerId: string;         // クエリで使うので必須に
+  ownerId: string; // クエリで使うので必須に
   taxDisplayMode?: "inclusive" | "exclusive";
 }
 

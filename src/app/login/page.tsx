@@ -1,7 +1,7 @@
 // app/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
@@ -36,12 +36,20 @@ function messageFromAuthError(err: unknown) {
 }
 
 export default function LoginPage() {
-  const router = useRouter();                 // ← トップレベルで呼び出し
+  const router = useRouter();
   const setSiteSettings = useSetAtom(siteSettingsAtom);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+  const saved = typeof window !== "undefined" ? sessionStorage.getItem("prefillEmail") : null;
+  if (saved) {
+    setEmail(saved);
+    sessionStorage.removeItem("prefillEmail");
+  }
+}, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -63,9 +71,9 @@ export default function LoginPage() {
 
       setSiteSettings(ss);
       toast.success(`ログイン成功（siteKey: ${ss.siteKey ?? ss.id}）`);
-      router.push("/");                       // ← 成功したらホームへ遷移
+      router.push("/"); // 成功したらホームへ遷移
     } catch (e: unknown) {
-      toast.error(messageFromAuthError(e));   // ← エラー理由を表示
+      toast.error(messageFromAuthError(e)); // エラー理由を表示
     } finally {
       setLoading(false);
     }
@@ -129,6 +137,27 @@ export default function LoginPage() {
             >
               {loading ? "ログイン中..." : "ログイン"}
             </Button>
+
+            {/* ここから追加：忘れた系ボタン */}
+            <div className="mt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full sm:w-auto text-blue-500"
+                onClick={() => router.push("/forgot-password")}
+              >
+                パスワードを忘れた
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full sm:w-auto ext-blue-500"
+                onClick={() => router.push("/forgot-email")}
+              >
+                メールアドレスを忘れた
+              </Button>
+            </div>
+            {/* 追加ここまで */}
           </div>
         </div>
       </form>

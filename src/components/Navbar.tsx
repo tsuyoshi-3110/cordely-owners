@@ -1,3 +1,4 @@
+// app/_components/Navbar.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -13,33 +14,76 @@ import { siteSettingsAtom } from "@/lib/atoms/siteSettingsAtom";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useAtomValue, useSetAtom } from "jotai";
-import {
-  List,
-  LogIn,
-  LogOut,
-  Menu,
-  Package,
-  Palette,
-  RotateCcw,
-} from "lucide-react";
+import { List, LogOut, Menu, Package, Palette, RotateCcw, Lock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+// ★ 追加：Firestore 購読で editable を読む
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot as onSnapshotDoc } from "firebase/firestore";
+
+type Editable = {
+  logoUrl?: string;
+  siteName?: string;
+} | null;
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const setSiteSettings = useSetAtom(siteSettingsAtom);
   const site = useAtomValue(siteSettingsAtom);
+
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
+  const [editable, setEditable] = useState<Editable>(null); // ★ 追加
 
-  const siteTitle = site?.siteName ?? "";
-
+  // ---------- 認証ガード ----------
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => setIsAuthed(!!user));
+    const unsub = onAuthStateChanged(auth, (user) => {
+      const authed = !!user;
+      setIsAuthed(authed);
+
+      const publicPaths = ["/login", "/forgot-email", "/forgot-password"];
+
+      if (!authed && !publicPaths.includes(pathname)) {
+        // 未ログイン → 公開ページ以外なら強制ログイン画面へ
+        router.replace("/login");
+      }
+
+      if (authed && pathname === "/login") {
+        // ログイン済みでログイン画面にいるならトップへ（任意）
+        router.replace("/");
+      }
+    });
     return () => unsub();
-  }, []);
+  }, [pathname, router]);
+
+  // ---------- editable を Firestore から購読 ----------
+  useEffect(() => {
+    // siteSettingsAtom からキーを抽出
+    const key = site?.siteKey ?? site?.id;
+    if (!key) {
+      setEditable(null);
+      return;
+    }
+    const ref = doc(db, "siteSettingsEditable", key);
+    const unsub = onSnapshotDoc(ref, (snap) => {
+      setEditable(snap.exists() ? (snap.data() as Editable) : null);
+    });
+    return () => unsub();
+  }, [site?.siteKey, site?.id]);
+
+  // ---------- 表示用にマージ ----------
+  const displayLogoUrl = useMemo(
+    () => editable?.logoUrl ?? site?.logoUrl ?? "/images/cordelyLogo.png",
+    [editable?.logoUrl, site?.logoUrl]
+  );
+  const displaySiteTitle = useMemo(
+    () => editable?.siteName ?? site?.siteName ?? "",
+    [editable?.siteName, site?.siteName]
+  );
 
   const go = (path: string) => {
     setOpen(false);
@@ -50,22 +94,25 @@ export default function Navbar() {
     try {
       await signOut(auth);
       setSiteSettings(null);
+      router.replace("/login");
     } finally {
       setOpen(false);
-      router.push("/login");
     }
   };
 
+  // /login ではナビ非表示 & 判定中/未ログインは描画しない
+  if (pathname === "/login" || isAuthed !== true) return null;
+
   return (
-    <header className="fixed inset-x-0 top-0 z-50 bg-gradient-to-r from-teal-500 to-pink-500 shadow-md">
+    <header className="fixed inset-x-0 top-0 z-50 bg-gradient-to-r from-teal-500 to-pink-500 shadow-md ">
       <div className="mx-auto flex h-14 max-w-screen-xl items-center px-4">
         <Link href="/" className="inline-flex items-center">
           <Image
-            src="/images/cordelyLogoH.png"
-            alt="Cordely"
+            src={displayLogoUrl}
+            alt={displaySiteTitle || "Cordely"}
             width={140}
             height={28}
-            className="h-30 w-auto"
+            className="h-12 w-auto"
             priority
           />
         </Link>
@@ -84,7 +131,6 @@ export default function Navbar() {
               </SheetHeader>
 
               <div className="mt-4 flex flex-col space-y-2">
-                {/* 一覧 */}
                 <SheetClose asChild>
                   <Button
                     variant="ghost"
@@ -96,7 +142,6 @@ export default function Navbar() {
                   </Button>
                 </SheetClose>
 
-                {/* 商品追加 */}
                 <SheetClose asChild>
                   <Button
                     variant="ghost"
@@ -119,7 +164,17 @@ export default function Navbar() {
                   </Button>
                 </SheetClose>
 
-                {/* （任意）リセット：今は閉じるだけ。処理を入れる場合はここに */}
+                <SheetClose asChild>
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => go("/change-password")}
+                  >
+                    <Lock className="mr-2" />
+                    パスワード変更
+                  </Button>
+                </SheetClose>
+
                 <SheetClose asChild>
                   <Button
                     variant="destructive"
@@ -131,44 +186,26 @@ export default function Navbar() {
                   </Button>
                 </SheetClose>
 
-                {/* 未ログイン時のみ：ログイン */}
-                {isAuthed === false && (
-                  <SheetClose asChild>
-                    <Button
-                      variant="ghost"
-                      className="justify-start"
-                      onClick={() => go("/login")}
-                    >
-                      <LogIn className="mr-2" />
-                      ログイン
-                    </Button>
-                  </SheetClose>
-                )}
-
-                {/* ログイン時のみ：ログアウト */}
-                {isAuthed === true && (
-                  <SheetClose asChild>
-                    <Button
-                      variant="default"
-                      className="justify-start"
-                      onClick={handleLogout}
-                    >
-                      <LogOut className="mr-2" />
-                      ログアウト
-                    </Button>
-                  </SheetClose>
-                )}
+                <SheetClose asChild>
+                  <Button
+                    variant="default"
+                    className="justify-start"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="mr-2" />
+                    ログアウト
+                  </Button>
+                </SheetClose>
               </div>
             </SheetContent>
           </Sheet>
         </div>
       </div>
 
-      {/* 中央：サイト名（クリックを邪魔しないよう pointer-events-none） */}
-      {siteTitle && (
+      {displaySiteTitle && (
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-14 items-center justify-center">
           <span className="max-w-[60%] truncate text-white text-sm font-semibold md:text-base drop-shadow">
-            {siteTitle}
+            {displaySiteTitle}
           </span>
         </div>
       )}
