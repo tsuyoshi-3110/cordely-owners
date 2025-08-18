@@ -106,6 +106,8 @@ export default function AddProductPage() {
   const [kw2, setKw2] = useState("");
   const [kw3, setKw3] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+
+  const [aiTarget, setAiTarget] = useState<"add" | "edit">("add");
   const canGenerate = useMemo(
     () => [kw1, kw2, kw3].some((k) => k.trim().length > 0),
     [kw1, kw2, kw3]
@@ -438,11 +440,13 @@ export default function AddProductPage() {
   };
 
   // AIモーダル
-  const openAi = () => {
-    if (!name.trim()) {
+  const openAi = (target: "add" | "edit") => {
+    const baseTitle = target === "edit" ? editName : name;
+    if (!baseTitle.trim()) {
       toast.warning("タイトル（商品名）を入力してください");
       return;
     }
+    setAiTarget(target);
     setAiOpen(true);
   };
 
@@ -451,14 +455,17 @@ export default function AddProductPage() {
     if (keywords.length === 0) return;
     try {
       setAiLoading(true);
+      const titleForAi = aiTarget === "edit" ? editName.trim() : name.trim(); // ★追加
       const res = await fetch("/api/generate-description", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: name.trim(), keywords, siteKey }),
+        body: JSON.stringify({ title: titleForAi, keywords, siteKey }), // ★タイトルを切替
       });
       if (!res.ok) throw new Error("AI endpoint error");
       const data = await res.json();
-      setDescription(String(data?.description ?? ""));
+      const text = String(data?.description ?? "");
+      if (aiTarget === "edit") setEditDesc(text); // ★編集フォームへ反映
+      else setDescription(text); // ★追加フォームへ反映
       setAiOpen(false);
       setKw1("");
       setKw2("");
@@ -565,22 +572,54 @@ export default function AddProductPage() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>セクションを追加</DialogTitle>
-              </DialogHeader>
+            {/* 2行グリッド：上=スクロール内容 / 下=固定フッター */}
+            <DialogContent className="max-w-lg max-h-[80svh] p-0 grid grid-rows-[1fr_auto]">
+              {/* スクロール領域 */}
+              <div className="overflow-y-auto overscroll-contain p-6">
+                <DialogHeader>
+                  <DialogTitle>セクションを追加</DialogTitle>
+                </DialogHeader>
 
-              {/* 追加フォーム */}
-              <div className="space-y-2">
-                <Label>セクション名</Label>
-                <Input
-                  value={sectionName}
-                  onChange={(e) => setSectionName(e.target.value)}
-                  placeholder="例）定番・季節限定・ドリンク など"
-                />
+                {/* 追加フォーム */}
+                <div className="space-y-2">
+                  <Label>セクション名</Label>
+                  <Input
+                    value={sectionName}
+                    onChange={(e) => setSectionName(e.target.value)}
+                    placeholder="例）定番・季節限定・ドリンク など"
+                  />
+                </div>
+
+                {/* 既存一覧＋削除 */}
+                <div className="mt-6">
+                  <p className="text-sm text-gray-600">既存セクション</p>
+                  <ul className="mt-2 divide-y rounded-md border">
+                    {sections.length === 0 && (
+                      <li className="p-3 text-sm text-gray-500">
+                        まだありません
+                      </li>
+                    )}
+                    {sections.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex items-center justify-between p-3"
+                      >
+                        <span className="text-sm">{s.name}</span>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deleteSection(s)}
+                        >
+                          削除
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
 
-              <DialogFooter className="mt-2">
+              {/* 固定フッター */}
+              <DialogFooter className="p-4 border-t bg-background">
                 <Button
                   variant="outline"
                   onClick={() => setSectionDialogOpen(false)}
@@ -591,33 +630,6 @@ export default function AddProductPage() {
                   作成
                 </Button>
               </DialogFooter>
-
-              {/* 既存一覧＋削除 */}
-              <div className="mt-6">
-                <p className="text-sm text-gray-600">既存セクション</p>
-                <ul className="mt-2 divide-y rounded-md border">
-                  {sections.length === 0 && (
-                    <li className="p-3 text-sm text-gray-500">
-                      まだありません
-                    </li>
-                  )}
-                  {sections.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center justify-between p-3"
-                    >
-                      <span className="text-sm">{s.name}</span>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteSection(s)}
-                      >
-                        削除
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -653,7 +665,7 @@ export default function AddProductPage() {
                       {p.soldOut && (
                         <div className="absolute inset-0 z-10 grid place-items-center bg-black/40">
                           <Image
-                            src="/images/soldOut.png" // public/images/soldOut.png に置いたファイル
+                            src="/images/soldOut.png"
                             alt="SOLD OUT"
                             fill
                             className="object-contain pointer-events-none select-none"
@@ -699,10 +711,28 @@ export default function AddProductPage() {
       {/* 画面右下の固定FAB（追加フォームを開く） */}
       <Button
         size="icon"
-        onClick={() => setFormOpen(true)}
-        aria-label={formOpen ? "フォームを閉じる" : "フォームを開く"}
-        title={formOpen ? "閉じる" : "追加フォームを開く"}
-        className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-[70] h-14 w-14 rounded-full shadow-lg"
+        disabled={editOpen} // ← 編集中は無効化
+        onClick={() => {
+          if (editOpen) return; // ← 念のためガード
+          setFormOpen(true);
+        }}
+        aria-disabled={editOpen}
+        aria-label={
+          editOpen
+            ? "編集中は新規追加できません"
+            : formOpen
+            ? "フォームを閉じる"
+            : "フォームを開く"
+        }
+        title={
+          editOpen
+            ? "編集中は新規追加できません"
+            : formOpen
+            ? "閉じる"
+            : "追加フォームを開く"
+        }
+        className={`fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-[70] h-14 w-14 rounded-full shadow-lg
+    ${editOpen ? "opacity-50 cursor-not-allowed" : ""}`} // ← 見た目も無効っぽく
       >
         {formOpen ? (
           <Minus className="h-6 w-6" />
@@ -711,39 +741,42 @@ export default function AddProductPage() {
         )}
       </Button>
 
-      {/* AIダイアログ */}
+      {/* AIダイアログ（追加・編集 共用 / 2行グリッド） */}
       <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>AIで本文生成</DialogTitle>
-          </DialogHeader>
-          <p className="mb-2 text-sm text-gray-600">
-            「{name || "（タイトル未入力）"}
-            」をもとに、キーワードを1〜3個入力してください。
-          </p>
-          <div className="space-y-3">
-            <Input
-              placeholder="キーワード1（必須）"
-              value={kw1}
-              onChange={(e) => setKw1(e.target.value)}
-            />
-            <Input
-              placeholder="キーワード2（任意）"
-              value={kw2}
-              onChange={(e) => setKw2(e.target.value)}
-            />
-            <Input
-              placeholder="キーワード3（任意）"
-              value={kw3}
-              onChange={(e) => setKw3(e.target.value)}
-            />
-            {!canGenerate && (
-              <p className="text-xs text-red-500">
-                キーワードを1つ以上入力すると「生成する」が有効になります。
-              </p>
-            )}
+        <DialogContent className="max-w-md max-h-[70svh] p-0 grid grid-rows-[1fr_auto]">
+          <div className="overflow-y-auto overscroll-contain p-6">
+            <DialogHeader>
+              <DialogTitle>AIで本文生成</DialogTitle>
+            </DialogHeader>
+            <p className="mb-2 text-sm text-gray-600">
+              「
+              {(aiTarget === "edit" ? editName : name) || "（タイトル未入力）"}
+              」 をもとに、キーワードを1〜3個入力してください。
+            </p>
+            <div className="space-y-3">
+              <Input
+                placeholder="キーワード1（必須）"
+                value={kw1}
+                onChange={(e) => setKw1(e.target.value)}
+              />
+              <Input
+                placeholder="キーワード2（任意）"
+                value={kw2}
+                onChange={(e) => setKw2(e.target.value)}
+              />
+              <Input
+                placeholder="キーワード3（任意）"
+                value={kw3}
+                onChange={(e) => setKw3(e.target.value)}
+              />
+              {!canGenerate && (
+                <p className="text-xs text-red-500">
+                  キーワードを1つ以上入力すると「生成する」が有効になります。
+                </p>
+              )}
+            </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="p-4 border-t bg-background">
             <Button variant="outline" onClick={() => setAiOpen(false)}>
               キャンセル
             </Button>
@@ -757,136 +790,146 @@ export default function AddProductPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 追加フォーム（モーダル） */}
+      {/* 追加フォーム（2行グリッド） */}
       <Dialog
         open={formOpen}
         onOpenChange={(open) => {
           setFormOpen(open);
-          if (!open) resetAddForm(); // 閉じる時に未設定へ戻す
+          if (!open) resetAddForm();
         }}
       >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>商品を追加</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-lg max-h-[85svh] p-0 grid grid-rows-[1fr_auto]">
+          {/* スクロール領域 */}
+          <div className="overflow-y-auto overscroll-contain p-6">
+            <DialogHeader>
+              <DialogTitle>商品を追加</DialogTitle>
+            </DialogHeader>
 
-          {!siteKey && (
-            <p className="text-sm font-semibold text-red-600">
-              siteKey が見つかりません。ログインし直してください。
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {/* セクション選択（任意） */}
-            <div className="grid gap-2">
-              <Label>セクション（任意）</Label>
-              <select
-                value={formSectionId}
-                onChange={(e) => setFormSectionId(e.target.value)}
-                className="h-10 rounded-md border px-2"
-              >
-                <option value="">未設定</option>
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500">
-                未設定の場合は「セクションなし」で保存されます。
+            {!siteKey && (
+              <p className="text-sm font-semibold text-red-600">
+                siteKey が見つかりません。ログインし直してください。
               </p>
-            </div>
+            )}
 
-            {/* タイトル */}
-            <div className="grid gap-2">
-              <Label htmlFor="name">タイトル（商品名）</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="例）ストロベリーチョコ"
-              />
-            </div>
-
-            {/* 価格＋税込/税抜 */}
-            <div className="grid gap-2">
-              <Label htmlFor="price">価格</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  id="price"
-                  type="number"
-                  inputMode="numeric"
-                  value={price ?? ""}
-                  onChange={(e) =>
-                    setPrice(
-                      e.target.value === "" ? undefined : Number(e.target.value)
-                    )
-                  }
-                  className="w-full"
-                  min={0}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant={formTaxIncluded ? "default" : "outline"}
-                    onClick={() => setFormTaxIncluded(true)}
-                  >
-                    税込
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={!formTaxIncluded ? "default" : "outline"}
-                    onClick={() => setFormTaxIncluded(false)}
-                  >
-                    税抜き
-                  </Button>
-                </div>
+            <div className="space-y-4">
+              {/* セクション選択（任意） */}
+              <div className="grid gap-2">
+                <Label>セクション（任意）</Label>
+                <select
+                  value={formSectionId}
+                  onChange={(e) => setFormSectionId(e.target.value)}
+                  className="h-10 rounded-md border px-2"
+                >
+                  <option value="">未設定</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">
+                  未設定の場合は「セクションなし」で保存されます。
+                </p>
               </div>
-              <p className="text-xs text-gray-600">
-                選択した設定は保存価格が「税込/税抜」どちらかを表します。
-              </p>
-            </div>
 
-            {/* 説明文＋AI生成 */}
-            <div className="grid gap-2">
-              <Label htmlFor="desc">説明文</Label>
-              <Textarea
-                id="desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={6}
-              />
-              <Button type="button" className="mt-2" onClick={openAi}>
-                AIで本文生成
-              </Button>
-            </div>
+              {/* タイトル */}
+              <div className="grid gap-2">
+                <Label htmlFor="name">タイトル（商品名）</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="例）ストロベリーチョコ"
+                />
+              </div>
 
-            {/* 画像 */}
-            <div className="grid gap-2">
-              <Label htmlFor="img">画像アップロード</Label>
-              <Input
-                id="img"
-                type="file"
-                accept="image/*"
-                onChange={onFile}
-                ref={fileInput}
-              />
-              {preview && (
-                <div className="mt-2 w-40 aspect-square relative overflow-hidden rounded-md">
-                  <Image
-                    src={preview}
-                    alt="preview"
-                    fill
-                    className="object-cover"
-                    unoptimized
-                    priority
+              {/* 価格＋税込/税抜 */}
+              <div className="grid gap-2">
+                <Label htmlFor="price">価格</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="price"
+                    type="number"
+                    inputMode="numeric"
+                    value={price ?? ""}
+                    onChange={(e) =>
+                      setPrice(
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value)
+                      )
+                    }
+                    className="w-full"
+                    min={0}
                   />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={formTaxIncluded ? "default" : "outline"}
+                      onClick={() => setFormTaxIncluded(true)}
+                    >
+                      税込
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={!formTaxIncluded ? "default" : "outline"}
+                      onClick={() => setFormTaxIncluded(false)}
+                    >
+                      税抜き
+                    </Button>
+                  </div>
                 </div>
-              )}
+                <p className="text-xs text-gray-600">
+                  選択した設定は保存価格が「税込/税抜」どちらかを表します。
+                </p>
+              </div>
+
+              {/* 説明文＋AI生成 */}
+              <div className="grid gap-2">
+                <Label htmlFor="desc">説明文</Label>
+                <Textarea
+                  id="desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={6}
+                />
+                <Button
+                  type="button"
+                  className="mt-2"
+                  onClick={() => openAi("add")}
+                >
+                  AIで本文生成
+                </Button>
+              </div>
+
+              {/* 画像 */}
+              <div className="grid gap-2">
+                <Label htmlFor="img">画像アップロード</Label>
+                <Input
+                  id="img"
+                  type="file"
+                  accept="image/*"
+                  onChange={onFile}
+                  ref={fileInput}
+                />
+                {preview && (
+                  <div className="mt-2 w-40 aspect-square relative overflow-hidden rounded-md">
+                    <Image
+                      src={preview}
+                      alt="preview"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                      priority
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <DialogFooter>
+          {/* 固定フッター */}
+          <DialogFooter className="p-4 border-t bg-background">
             <Button variant="outline" onClick={() => setFormOpen(false)}>
               キャンセル
             </Button>
@@ -897,132 +940,143 @@ export default function AddProductPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 編集フォーム（モーダル） */}
+      {/* 編集フォーム（2行グリッド） */}
       <Dialog open={editOpen} onOpenChange={handleEditOpenChange}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>商品を編集</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-lg max-h-[85svh] p-0 grid grid-rows-[1fr_auto]">
+          {/* スクロール領域 */}
+          <div className="overflow-y-auto overscroll-contain p-6">
+            <DialogHeader>
+              <DialogTitle>商品を編集</DialogTitle>
+            </DialogHeader>
 
-          {!editing ? (
-            <p className="text-sm text-gray-500">読み込み中…</p>
-          ) : (
-            <div className="space-y-4">
-              {/* セクション */}
-              <div className="grid gap-2">
-                <Label>セクション</Label>
-                <select
-                  value={editSectionId}
-                  onChange={(e) => setEditSectionId(e.target.value)}
-                  className="h-10 rounded-md border px-2"
-                >
-                  <option value="">未設定</option>
-                  {sections.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {!editing ? (
+              <p className="text-sm text-gray-500">読み込み中…</p>
+            ) : (
+              <div className="space-y-4">
+                {/* セクション */}
+                <div className="grid gap-2">
+                  <Label>セクション</Label>
+                  <select
+                    value={editSectionId}
+                    onChange={(e) => setEditSectionId(e.target.value)}
+                    className="h-10 rounded-md border px-2"
+                  >
+                    <option value="">未設定</option>
+                    {sections.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* 商品名 */}
-              <div className="grid gap-2">
-                <Label>商品名</Label>
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                />
-              </div>
-
-              {/* 価格＋税込/税抜 */}
-              <div className="grid gap-2">
-                <Label>価格</Label>
-                <div className="flex items-center gap-3">
+                {/* 商品名 */}
+                <div className="grid gap-2">
+                  <Label>商品名</Label>
                   <Input
-                    type="number"
-                    inputMode="numeric"
-                    value={editPrice ?? ""}
-                    onChange={(e) =>
-                      setEditPrice(
-                        e.target.value === ""
-                          ? undefined
-                          : Number(e.target.value)
-                      )
-                    }
-                    min={0}
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
                   />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={editTaxIncluded ? "default" : "outline"}
-                      onClick={() => setEditTaxIncluded(true)}
-                    >
-                      税込
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={!editTaxIncluded ? "default" : "outline"}
-                      onClick={() => setEditTaxIncluded(false)}
-                    >
-                      税抜き
-                    </Button>
-                  </div>
                 </div>
-              </div>
 
-              {/* 説明文 */}
-              <div className="grid gap-2">
-                <Label>説明文</Label>
-                <Textarea
-                  rows={6}
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                />
-              </div>
-
-              {/* 販売ステータス */}
-              <div className="grid gap-2">
-                <Label>販売ステータス</Label>
-                <div className="flex items-center gap-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={editSoldOut ? "outline" : "default"}
-                    onClick={() => setEditSoldOut(false)}
-                  >
-                    販売中
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={!editSoldOut ? "outline" : "default"}
-                    onClick={() => setEditSoldOut(true)}
-                  >
-                    売り切れ
-                  </Button>
-                </div>
-              </div>
-
-              {/* 画像（変更時のみ） */}
-              <div className="grid gap-2">
-                <Label>画像（変更する場合のみ選択）</Label>
-                <Input type="file" accept="image/*" onChange={onEditFile} />
-                {(editPreview || editing.imageUri) && (
-                  <div className="mt-2 w-40 aspect-square relative overflow-hidden rounded-md">
-                    <Image
-                      src={editPreview || editing.imageUri}
-                      alt="preview"
-                      fill
-                      className="object-cover"
-                      unoptimized={Boolean(editPreview)}
+                {/* 価格＋税込/税抜 */}
+                <div className="grid gap-2">
+                  <Label>価格</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      value={editPrice ?? ""}
+                      onChange={(e) =>
+                        setEditPrice(
+                          e.target.value === ""
+                            ? undefined
+                            : Number(e.target.value)
+                        )
+                      }
+                      min={0}
                     />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={editTaxIncluded ? "default" : "outline"}
+                        onClick={() => setEditTaxIncluded(true)}
+                      >
+                        税込
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={!editTaxIncluded ? "default" : "outline"}
+                        onClick={() => setEditTaxIncluded(false)}
+                      >
+                        税抜き
+                      </Button>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-          )}
+                </div>
 
-          <DialogFooter>
+                {/* 説明文（編集でもAIを使える） */}
+                <div className="grid gap-2">
+                  <Label>説明文</Label>
+                  <Textarea
+                    rows={6}
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    className="mt-2"
+                    onClick={() => openAi("edit")}
+                  >
+                    AIで本文生成
+                  </Button>
+                </div>
+
+                {/* 販売ステータス */}
+                <div className="grid gap-2">
+                  <Label>販売ステータス</Label>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={editSoldOut ? "outline" : "default"}
+                      onClick={() => setEditSoldOut(false)}
+                    >
+                      販売中
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!editSoldOut ? "outline" : "default"}
+                      onClick={() => setEditSoldOut(true)}
+                    >
+                      売り切れ
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 画像（変更時のみ） */}
+                <div className="grid gap-2">
+                  <Label>画像（変更する場合のみ選択）</Label>
+                  <Input type="file" accept="image/*" onChange={onEditFile} />
+                  {(editPreview || editing.imageUri) && (
+                    <div className="mt-2 w-40 aspect-square relative overflow-hidden rounded-md">
+                      <Image
+                        src={editPreview || editing.imageUri}
+                        alt="preview"
+                        fill
+                        className="object-cover"
+                        unoptimized={Boolean(editPreview)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 固定フッター */}
+          <DialogFooter className="p-4 border-t bg-background">
             <Button
               variant="outline"
               onClick={() => handleEditOpenChange(false)}
