@@ -16,7 +16,7 @@ import {
 import { useAtomValue } from "jotai";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type OrderItem = {
@@ -49,33 +49,68 @@ export default function OrderDetailPage() {
   const [deny, setDeny] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // もともとの atom 値
+  const atomId = useAtomValue(orderIdAtom);
+
+  // ルート /orders/[id] から取得
+  const params = useParams<{ id?: string }>();
+  const routeId =
+    typeof params?.id === "string"
+      ? params.id
+      : Array.isArray(params?.id)
+      ? params?.id[0]
+      : undefined;
+
+  // /orders?id=... 形式にも対応（不要なら省略可）
+  const search = useSearchParams();
+  const queryId = search?.get("id") ?? undefined;
+
+  // 最終ID（Atom → ルート → クエリ の優先順）
+  const orderId = atomId || routeId || queryId;
+
   // 取得
   useEffect(() => {
+    // ID が無ければ即終了（スピナーを止める）
+    if (!orderId) {
+      setDeny("注文IDが指定されていません。");
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     (async () => {
-      if (!id) return;
       try {
-        const snap = await getDoc(doc(db, "orders", id));
+        const snap = await getDoc(doc(db, "orders", orderId));
         if (!snap.exists()) {
-          setDeny("注文データが見つかりません。");
-          setLoading(false);
+          if (!cancelled) {
+            setDeny("注文データが見つかりません。");
+          }
           return;
         }
         const data = snap.data() as Omit<OrderDoc, "id">;
-        // siteKey の整合性チェック
+
+        // siteKey チェック
         if (siteKey && data.siteKey && data.siteKey !== siteKey) {
-          setDeny("この注文にはアクセスできません（siteKey が一致しません）。");
-          setLoading(false);
+          if (!cancelled) {
+            setDeny(
+              "この注文にはアクセスできません（siteKey が一致しません）。"
+            );
+          }
           return;
         }
-        setOrder({ id: snap.id, ...data });
+
+        if (!cancelled) setOrder({ id: snap.id, ...data });
       } catch (e) {
         console.error(e);
-        setDeny("読み込み中にエラーが発生しました。");
+        if (!cancelled) setDeny("読み込み中にエラーが発生しました。");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, [id, siteKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, siteKey]);
 
   const createdAtDate = useMemo(() => {
     if (!order) return null;
@@ -153,7 +188,7 @@ export default function OrderDetailPage() {
   return (
     <div className="relative">
       {/* 固定ヘッダー（グローバルNavbarが h-14 想定） */}
-      <header className="fixed inset-x-0 top-14 z-40 bg-gradient-to-r from-teal-500 to-pink-500 shadow-md relative">
+      <header className="fixed inset-x-0 top-14 z-40 bg-gradient-to-r from-teal-500 to-pink-500 shadow-md ">
         {/* 画面の一番左端に配置される戻るボタン */}
         <Button
           variant="ghost"
@@ -161,7 +196,7 @@ export default function OrderDetailPage() {
           onClick={() => router.back()}
           aria-label="戻る"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-10 w-10" />
         </Button>
 
         {/* 中央にタイトル（幅はコンテナで制限） */}

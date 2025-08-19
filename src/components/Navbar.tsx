@@ -213,7 +213,7 @@ export default function Navbar() {
 
       {displaySiteTitle && (
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-14 items-center justify-center">
-          <span className="max-w-[60%] truncate text-white text-sm font-semibold md:text-base drop-shadow">
+          <span className="max-w-[60%] truncate text-white text-md font-semibold md:text-base drop-shadow">
             {displaySiteTitle}
           </span>
         </div>
