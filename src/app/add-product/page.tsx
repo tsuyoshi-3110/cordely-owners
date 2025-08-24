@@ -661,6 +661,7 @@ export default function AddProductPage() {
                         fill
                         className="object-cover"
                         sizes="50vw"
+                        unoptimized
                       />
                       {p.soldOut && (
                         <div className="absolute inset-0 z-10 grid place-items-center bg-black/40">
@@ -670,6 +671,7 @@ export default function AddProductPage() {
                             fill
                             className="object-contain pointer-events-none select-none"
                             priority={false}
+                            unoptimized
                           />
                         </div>
                       )}

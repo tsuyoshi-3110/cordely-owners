@@ -2,19 +2,19 @@
 const nextConfig = {
   images: {
     remotePatterns: [
+      // 旧来の API 形式
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
-        pathname: '/v0/b/**', // Firebase Storage のパス
+        pathname: '/v0/b/**',
       },
-      // 使う可能性があるなら追加
+      // 新しい *.firebasestorage.app の直リンク
       {
         protocol: 'https',
-        hostname: 'storage.googleapis.com',
+        hostname: '**.firebasestorage.app', // ワイルドカード可（Next 13.4+）
         pathname: '/**',
       },
     ],
   },
 };
-
 export default nextConfig;
