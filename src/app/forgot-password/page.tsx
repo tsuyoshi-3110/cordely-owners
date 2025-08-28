@@ -80,7 +80,9 @@ export default function Page() {
   };
 
   return (
-    <div className="max-w-xl mx-auto bg-white p-6 rounded shadow space-y-4 pt-20">
+
+      <main className="min-h-[100dvh] flex items-center justify-center px-4">
+   <div className="max-w-xl mx-auto bg-white p-6 rounded shadow space-y-4 pt-20">
       <h2 className="text-xl font-bold text-center">パスワード再設定</h2>
       <p className="text-sm text-gray-600 text-center">
         登録済みのメールアドレスを入力すると、再設定用リンクを送信します。
@@ -127,5 +129,7 @@ export default function Page() {
         ※ メールが見当たらない場合は迷惑メールフォルダもご確認ください。
       </div>
     </div>
+  </main>
+
   );
 }
