@@ -2,89 +2,63 @@
 
 import { auth } from "@/lib/firebase";
 import { FirebaseError } from "firebase/app";
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  signOut,
-  updatePassword,
-} from "firebase/auth";
+import { sendPasswordResetEmail } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function Page() {
-  const user = auth.currentUser;
   const router = useRouter();
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [cooldown, setCooldown] = useState(0); // 再送クールダウン（秒）
 
-  const validatePassword = (pw: string): string | null => {
-    if (pw.length < 8) return "パスワードは8文字以上にしてください。";
-    if (!/[a-z]/.test(pw)) return "小文字を1文字以上含めてください。";
-    if (!/[A-Z]/.test(pw)) return "大文字を1文字以上含めてください。";
-    if (!/[0-9]/.test(pw)) return "数字を1文字以上含めてください。";
-    if (!/[!@#$%^&*()_+\-=[\]{};':\"\\|,.<>/?]/.test(pw))
-      return "記号（!@#$%^&*など）を1文字以上含めてください。";
-    return null;
-  };
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown((s) => s - 1), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
 
-  const handleChangePassword = async () => {
-    if (!user || !user.email) {
-      setMessage(
-        "ログイン情報が確認できません。再度ログインし直してください。"
-      );
-      setIsSuccess(false);
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setMessage("新しいパスワードと確認用パスワードが一致しません。");
-      setIsSuccess(false);
-      return;
-    }
-    const error = validatePassword(newPassword);
-    if (error) {
-      setMessage(error);
-      setIsSuccess(false);
+  const handleSendReset = async () => {
+    setMessage("");
+    setIsSuccess(false);
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setMessage("正しいメールアドレスを入力してください。");
       return;
     }
 
     setLoading(true);
     try {
-      const cred = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, cred);
-      await updatePassword(user, newPassword);
-      await signOut(auth);
+      // いちばん簡単な方法：actionCodeSettings を渡さず、Firebaseのデフォルト画面で再設定
+      await sendPasswordResetEmail(auth, email);
 
-      setMessage("✅ パスワードを変更しました。再度ログインしてください。");
       setIsSuccess(true);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-
-      setTimeout(() => router.replace("/login"), 1500);
+      setMessage(
+        "✅ パスワード再設定用のメールを送信しました。メール内のリンクから手続きを完了してください。"
+      );
+      setCooldown(60); // 60秒の再送クールダウン
     } catch (err) {
       console.error(err);
       setIsSuccess(false);
       if (err instanceof FirebaseError) {
         switch (err.code) {
-          case "auth/invalid-credential":
-          case "auth/wrong-password":
-            setMessage("現在のパスワードが正しくありません。");
-            break;
-          case "auth/requires-recent-login":
+          case "auth/user-not-found":
             setMessage(
-              "セキュリティのため再ログインが必要です。ログインし直してください。"
+              "このメールアドレスのユーザーが見つかりませんでした。入力内容をご確認ください。"
+            );
+            break;
+          case "auth/invalid-email":
+            setMessage("メールアドレスの形式が正しくありません。");
+            break;
+          case "auth/too-many-requests":
+            setMessage(
+              "短時間にリクエストが多すぎます。しばらく時間をおいてから再度お試しください。"
             );
             break;
           case "auth/network-request-failed":
-            setMessage(
-              "ネットワークエラーが発生しました。接続をご確認ください。"
-            );
+            setMessage("ネットワークエラーが発生しました。接続をご確認ください。");
             break;
           default:
             setMessage(`エラーが発生しました: ${err.message}`);
@@ -98,55 +72,38 @@ export default function Page() {
   };
 
   const handleClose = () => {
-    if (typeof window !== "undefined" && window.history.length > 1)
+    if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
-    else router.push("/login");
+    } else {
+      router.push("/login");
+    }
   };
 
   return (
     <div className="max-w-xl mx-auto bg-white p-6 rounded shadow space-y-4 pt-20">
-      <h2 className="text-xl font-bold text-center">パスワード変更</h2>
+      <h2 className="text-xl font-bold text-center">パスワード再設定</h2>
       <p className="text-sm text-gray-600 text-center">
-        条件：8文字以上・大文字・小文字・数字・記号（!@#$% など）
+        登録済みのメールアドレスを入力すると、再設定用リンクを送信します。
       </p>
 
       <input
-        type={showPassword ? "text" : "password"}
-        placeholder="現在のパスワード"
+        type="email"
+        placeholder="メールアドレス"
         className="w-full border px-3 py-2 rounded"
-        value={currentPassword}
-        onChange={(e) => setCurrentPassword(e.target.value)}
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
       />
-      <input
-        type={showPassword ? "text" : "password"}
-        placeholder="新しいパスワード"
-        className="w-full border px-3 py-2 rounded"
-        value={newPassword}
-        onChange={(e) => setNewPassword(e.target.value)}
-      />
-      <input
-        type={showPassword ? "text" : "password"}
-        placeholder="新しいパスワード（確認）"
-        className="w-full border px-3 py-2 rounded"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-      />
-
-      <div className="text-right text-sm">
-        <button
-          onClick={() => setShowPassword((prev) => !prev)}
-          className="text-blue-600 underline"
-        >
-          パスワードを{showPassword ? "非表示" : "表示"}にする
-        </button>
-      </div>
 
       <button
-        onClick={handleChangePassword}
-        disabled={loading}
+        onClick={handleSendReset}
+        disabled={loading || cooldown > 0}
         className="bg-blue-600 text-white w-full py-2 rounded disabled:opacity-50"
       >
-        {loading ? "変更中…" : "変更する"}
+        {loading
+          ? "送信中…"
+          : cooldown > 0
+          ? `再送まで ${cooldown}s`
+          : "再設定メールを送る"}
       </button>
 
       <button
@@ -165,6 +122,10 @@ export default function Page() {
           {message}
         </p>
       )}
+
+      <div className="text-md text-gray-500 text-center">
+        ※ メールが見当たらない場合は迷惑メールフォルダもご確認ください。
+      </div>
     </div>
   );
 }
